@@ -45,53 +45,55 @@
  * * Sometimes memory actually drops substantially. Is it worth logging that too?
  */
 
-function tribe_profile_time() {
-	// settings
-	$sampling_rate = (defined('TRIBE_PROFILE_SAMPLE_RATE')) ? TRIBE_PROFILE_SAMPLE_RATE : 1; // 0 = off, 1 = always.
-	$time_threshold = (defined('TRIBE_PROFILE_TIME_THRESHOLD')) ? TRIBE_PROFILE_TIME_THRESHOLD : 10; // minimum time in milliseconds for reporting.
-	$mem_threshold = (defined('TRIBE_PROFILE_MEMORY_THRESHOLD')) ? TRIBE_PROFILE_MEMORY_THRESHOLD : 1024; // minimum memory in kb for reporting.
+if ( !function_exists('tribe_profile_time') ) {
+	function tribe_profile_time() {
+		// settings
+		$sampling_rate = (defined('TRIBE_PROFILE_SAMPLE_RATE')) ? TRIBE_PROFILE_SAMPLE_RATE : 1; // 0 = off, 1 = always.
+		$time_threshold = (defined('TRIBE_PROFILE_TIME_THRESHOLD')) ? TRIBE_PROFILE_TIME_THRESHOLD : 10; // minimum time in milliseconds for reporting.
+		$mem_threshold = (defined('TRIBE_PROFILE_MEMORY_THRESHOLD')) ? TRIBE_PROFILE_MEMORY_THRESHOLD : 1024; // minimum memory in kb for reporting.
 
-	// use sampling rate to decide if we should profile and generate a unique key.
-	if ( !$sampling_rate ) return; // sample rate = 0 so turn this off.
+		// use sampling rate to decide if we should profile and generate a unique key.
+		if ( !$sampling_rate ) return; // sample rate = 0 so turn this off.
 
-	static $key;
-	if ( $key === false ) return; // key was previously determined to be a silent load.
-	if ( empty( $key ) ) { // key has not been set... let's roll the dice.
-		$rand = rand( 0, 999 );
-		if ( $sampling_rate < 1 && $rand > $sampling_rate * 1000 ) { // silent load.
-			$key = false;
-			return;
+		static $key;
+		if ( $key === false ) return; // key was previously determined to be a silent load.
+		if ( empty( $key ) ) { // key has not been set... let's roll the dice.
+			$rand = rand( 0, 999 );
+			if ( $sampling_rate < 1 && $rand > $sampling_rate * 1000 ) { // silent load.
+				$key = false;
+				return;
+			}
+			$key = 'Load:'.str_pad($rand,4,"0",STR_PAD_LEFT); // profiled load.
 		}
-		$key = 'Load:'.str_pad($rand,4,"0",STR_PAD_LEFT); // profiled load.
+
+		// Calculate time diff
+		global $timestart;
+		static $previous_time;
+		$timeend = microtime( true );
+		$time = round( ($timeend - $timestart) * 1000 );
+		$timediff = $time - $previous_time;
+
+		// Calculate memory diff
+		static $previous_memory;
+		$mem_now = round( memory_get_usage(  )/1024 );
+		$memdiff = $mem_now - $previous_memory;
+
+		static $previous_filter;
+		$filter = current_filter();
+
+		if (empty($previous_filter)) {
+			$url = $_SERVER['HTTP_HOST'].$_SERVER['REQUEST_URI'];
+			tribe_profiler_error_log( array( $key, $url ) );
+			tribe_profiler_error_log( array( $key, 'TIME', 'DELTA', 'MEM', 'DELTA', 'FILTER' ) );
+		} elseif ( $timediff > $time_threshold || $memdiff > $mem_threshold ) {
+			tribe_profiler_error_log( array( $key, $time, $timediff, $previous_memory, $memdiff, $previous_filter ) );
+		}
+		$previous_filter = $filter;
+		$previous_memory = $mem_now;
+		$previous_time = $time;
 	}
-
-	// Calculate time diff
-	global $timestart;
-	static $previous_time;
-	$timeend = microtime( true );
-	$time = round( ($timeend - $timestart) * 1000 );
-	$timediff = $time - $previous_time;
-
-	// Calculate memory diff
-	static $previous_memory;
-	$mem_now = round( memory_get_usage(  )/1024 );
-	$memdiff = $mem_now - $previous_memory;
-
-	static $previous_filter;
-	$filter = current_filter();
-
-	if (empty($previous_filter)) {
-		$url = $_SERVER['HTTP_HOST'].$_SERVER['REQUEST_URI'];
-		tribe_profiler_error_log( array( $key, $url ) );
-		tribe_profiler_error_log( array( $key, 'TIME', 'DELTA', 'MEM', 'DELTA', 'FILTER' ) );
-	} elseif ( $diff > $time_threshold || $memdiff > $mem_threshold ) {
-		tribe_profiler_error_log( array( $key, $time, $timediff, $previous_memory, $memdiff, $previous_filter ) );
-	}
-	$previous_filter = $filter;
-	$previous_memory = $mem_now;
-	$previous_time = $time;
+	add_action('all','tribe_profile_time');
 }
-add_action('all','tribe_profile_time');
 
 /**
  * Log the messages to a custom error log. Defaults to wp-content/tribe_profile.log.
@@ -109,51 +111,54 @@ function tribe_profiler_error_log( $columns = array() ) {
 	}
 }
 
-/**
- * Use this function in wp-includes/plugin.php around line 403 where it says:
- * call_user_func_array($the_['function'], array_slice($args, 0, (int) $the_['accepted_args']));
- * Add this function on the same line directly after the semicolon (but don't leave it there for long).
- *
- * Example:
- * tribe_function_dump( 'init', $tag, $the_['function'] );
- *
- * @param $hook_to_dump the hook we're looking for. for example: 'init'.
- * @param $hook_now_processing the hook now processing. Use $tag.
- * @param $function_now_processing the function now processing. Use $the_['function'].
- */
-function tribe_function_dump( $hook_to_dump, $hook_now_processing, $function_now_processing ) {
-	global $timestart;
+if ( !function_exists('tribe_function_dump') ) {
 
-	static $last_function_dump;
-	//static $last_function, $previous_time, $previous_memory;
+	/**
+	 * Use this function in wp-includes/plugin.php around line 403 where it says:
+	 * call_user_func_array($the_['function'], array_slice($args, 0, (int) $the_['accepted_args']));
+	 * Add this function on the same line directly after the semicolon (but don't leave it there for long).
+	 *
+	 * Example:
+	 * tribe_function_dump( 'init', $tag, $the_['function'] );
+	 *
+	 * @param $hook_to_dump the hook we're looking for. for example: 'init'.
+	 * @param $hook_now_processing the hook now processing. Use $tag.
+	 * @param $function_now_processing the function now processing. Use $the_['function'].
+	 */
+	function tribe_function_dump( $hook_to_dump, $hook_now_processing, $function_now_processing ) {
+		global $timestart;
 
-	// use the raw vars instead of timer_stop() to avoid ln10 filters
-	$timeend = microtime( true );
-	$time = round( ($timeend - $timestart) * 1000 );
-	$diff = (isset($last_function_dump['time'])) ? $time - $last_function_dump['time'] : $time;
+		static $last_function_dump;
+		//static $last_function, $previous_time, $previous_memory;
 
-	// Calculate memory diff
-	$memory = round( memory_get_usage()/1024 );
-	$memdiff = (isset($last_function_dump['memory'])) ? $memory - $last_function_dump['memory'] : $memory;
+		// use the raw vars instead of timer_stop() to avoid ln10 filters
+		$timeend = microtime( true );
+		$time = round( ($timeend - $timestart) * 1000 );
+		$diff = (isset($last_function_dump['time'])) ? $time - $last_function_dump['time'] : $time;
 
-	if ( $last_function_dump ) {
-		tribe_profiler_error_log( array( 'FUNCTION TEST', $diff . 'ms', $memdiff . 'kb', $last_function_dump['hook'], $last_function_dump['function'] ) );
-		$last_function_dump = false;
-	}
-	if ( $hook_now_processing == $hook_to_dump ) {
-		if ( is_array( $function_now_processing ) ) {
-			if ( is_string( $function_now_processing[0] ) ) {
-				$function_now_processing = join('::',$function_now_processing);
-			} elseif ( is_object( $function_now_processing[0] ) ) {
-				$function_now_processing = get_class($function_now_processing[0]).'::'.$function_now_processing[1];
-			}
+		// Calculate memory diff
+		$memory = round( memory_get_usage()/1024 );
+		$memdiff = (isset($last_function_dump['memory'])) ? $memory - $last_function_dump['memory'] : $memory;
+
+		if ( $last_function_dump ) {
+			tribe_profiler_error_log( array( 'FUNCTION TEST', $diff . 'ms', $memdiff . 'kb', $last_function_dump['hook'], $last_function_dump['function'] ) );
+			$last_function_dump = false;
 		}
-		$last_function_dump = array(
-			'hook' => $hook_now_processing,
-			'function' => $function_now_processing,
-			'time' => $time,
-			'memory' => $memory,
-		);
+		if ( $hook_now_processing == $hook_to_dump ) {
+			if ( is_array( $function_now_processing ) ) {
+				if ( is_string( $function_now_processing[0] ) ) {
+					$function_now_processing = join('::',$function_now_processing);
+				} elseif ( is_object( $function_now_processing[0] ) ) {
+					$function_now_processing = get_class($function_now_processing[0]).'::'.$function_now_processing[1];
+				}
+			}
+			$last_function_dump = array(
+				'hook' => $hook_now_processing,
+				'function' => $function_now_processing,
+				'time' => $time,
+				'memory' => $memory,
+			);
+		}
 	}
 }
 ?>
