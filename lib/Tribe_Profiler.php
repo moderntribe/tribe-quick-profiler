@@ -52,7 +52,7 @@ if ( !class_exists('Tribe_Profiler') ) {
 
 			if ( defined('TRIBE_PROFILE_TIME_THRESHOLD') ) $this->time_threshold = TRIBE_PROFILE_TIME_THRESHOLD;
 			if ( defined('TRIBE_PROFILE_MEMORY_THRESHOLD') ) $this->mem_threshold = TRIBE_PROFILE_MEMORY_THRESHOLD;
-			if ( defined('TRIBE_PROFILE_LOG_FILE') ) $this->log_file = ( TRIBE_PROFILE_LOG_FILE == '1' || TRIBE_PROFILE_LOG_FILE == true ) ? WP_CONTENT_DIR.'/tribe_profile.log' : TRIBE_PROFILE_LOG_FILE;
+			if ( defined('TRIBE_PROFILE_LOG_FILE') ) $this->log_file = ( TRIBE_PROFILE_LOG_FILE == '1' || TRIBE_PROFILE_LOG_FILE === true ) ? WP_CONTENT_DIR.'/tribe_profile.log' : TRIBE_PROFILE_LOG_FILE;
 			if ( defined('TRIBE_PROFILE_DISPLAY_ARGS') ) $this->display_args = ( TRIBE_PROFILE_DISPLAY_ARGS == '1' || TRIBE_PROFILE_DISPLAY_ARGS == true ) ? true : false;
 
 			$this->log = new stdClass();
