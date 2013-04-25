@@ -35,6 +35,7 @@ if ( !class_exists('Tribe_Profiler') ) {
 		private $timediff = array();
 		private $memory = array();
 		private $memorydiff = array();
+		private $lastcurl = '';
 
 		/**
 		 * Main constructor function. This is where it all begins.
@@ -68,7 +69,13 @@ if ( !class_exists('Tribe_Profiler') ) {
 
 			add_action( 'all', array( $this, 'profile_time' ), 0, 2 );
 			add_action( 'all', array( $this, 'cumulative_logging' ), 0, 1 );
-			add_action( 'shutdown', array( $this, 'log_dump' ) ,9999);
+			add_action( 'shutdown', array( $this, 'log_dump' ), 9999 );
+			add_action( 'http_api_curl', array( $this, 'log_last_curl' ), 9999, 1 );
+		}
+
+		public function log_last_curl( $handle ) {
+			$curl_info = curl_getinfo($handle);
+			$this->lastcurl = $curl_info['url'];
 		}
 
 		private function get_time( $key = 'default' ) {
@@ -106,6 +113,7 @@ if ( !class_exists('Tribe_Profiler') ) {
 			if ( !empty($previous_hook) && ( $this->timediff['profile_time'] > $this->time_threshold || $this->memorydiff['profile_time'] > $this->mem_threshold ) ) {
 				$this->logentry = new stdClass();
 				$this->logentry->hook = $previous_hook;
+				if ( $previous_hook == 'http_api_curl' ) $this->logentry->hook .= ': '.$this->lastcurl;
 				$this->logentry->time = $this->time['profile_time'];
 				$this->logentry->timediff = $this->timediff['profile_time'];
 				$this->logentry->memory = $this->memory['profile_time'];
