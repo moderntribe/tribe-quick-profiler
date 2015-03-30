@@ -1,0 +1,14 @@
+{
+    "name": "moderntribe/tribe-quick-profiler",
+    "description": "A tool to easily and rapidly profile WordPress load time and memory usage with an extremely low overhead.",
+    "type": "wordpress-plugin",
+    "license": "GPL-2.0",
+    "authors": [
+        {
+            "name": "Peter Chester",
+            "email": "peter@tri.be"
+        }
+    ],
+    "minimum-stability": "dev",
+    "require": {}
+}
